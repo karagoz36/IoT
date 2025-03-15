@@ -1,35 +1,66 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Define server details
+SERVER_NAME = "tkaragozS"
+WORKER_NAME = "tkaragozSW"
+SERVER_IP = "192.168.56.110"
+WORKER_IP = "192.168.56.111"
+IMAGE = "ubuntu/jammy64"    # Ubuntu 22.04 LTS (Jammy Jellyfish)
+
+# Define resources
+CPUS = 1
+MEMORY = 1024
+
+# K3s version
+K3S_VERSION = "v1.25.0+k3s1"
+NODE_TOKEN_FILE = ".node-token"  # File to store the node token
+
 Vagrant.configure("2") do |config|
-    config.vm.box = "ubuntu/jammy64"  # Ubuntu 22.04 LTS
-    config.vm.network "private_network", type: "dhcp"
+  config.vm.box = IMAGE
   
-    # SERVER
-    config.vm.define "tkaragozS" do |server|
-      server.vm.hostname = "tkaragozS"
-      server.vm.network "private_network", ip: "192.168.56.110"
-      server.vm.provider "virtualbox" do |vb|
-        vb.memory = "1024"
-        vb.cpus = 1
-      end
-      server.vm.provision "shell", inline: <<-SHELL
-        sudo apt update
-        sudo apt install -y curl
-        curl -sfL https://get.k3s.io | sh -
-      SHELL
+  # Configure Server Node (K3s controller)
+  config.vm.define SERVER_NAME do |server|
+    server.vm.hostname = SERVER_NAME
+    server.vm.network "private_network", ip: SERVER_IP
+    
+    server.vm.provider "virtualbox" do |vb|
+      vb.name = SERVER_NAME
+      vb.memory = MEMORY
+      vb.cpus = CPUS
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
     end
-  
-    # SERVERWORKER
-    config.vm.define "tkaragozSW" do |worker|
-      worker.vm.hostname = "tkaragozSW"
-      worker.vm.network "private_network", ip: "192.168.56.111"
-      worker.vm.provider "virtualbox" do |vb|
-        vb.memory = "1024"
-        vb.cpus = 1
-      end
-      worker.vm.provision "shell", inline: <<-SHELL
-        sudo apt update
-        sudo apt install -y curl
-        curl -sfL https://get.k3s.io | K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="NODE_TOKEN" sh -
-      SHELL
-    end
+    
+    # Install K3s server
+    server.vm.provision "shell", path: "scripts/install_server.sh", env: {
+      "K3S_VERSION" => K3S_VERSION,
+      "NODE_TOKEN_FILE" => "/vagrant/#{NODE_TOKEN_FILE}",
+      "SERVER_IP" => SERVER_IP
+    }
   end
   
+  # Configure Worker Node (K3s agent)
+  config.vm.define WORKER_NAME do |worker|
+    worker.vm.hostname = WORKER_NAME
+    worker.vm.network "private_network", ip: WORKER_IP
+    
+    worker.vm.provider "virtualbox" do |vb|
+      vb.name = WORKER_NAME
+      vb.memory = MEMORY
+      vb.cpus = CPUS
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    end
+    
+    # Install K3s agent
+    worker.vm.provision "shell", path: "scripts/install_agent.sh", env: {
+      "K3S_VERSION" => K3S_VERSION,
+      "NODE_TOKEN_FILE" => "/vagrant/#{NODE_TOKEN_FILE}",
+      "SERVER_IP" => SERVER_IP,
+      "WORKER_IP" => WORKER_IP
+    }
+  end
+  
+  # SSH configuration for password-less login
+  config.ssh.insert_key = true
+  config.ssh.forward_agent = true
+end

@@ -1,0 +1,12 @@
+# Vagrant files
+*/.vagrant/
+**/.vagrant/
+
+# Sensitive files
+*/.node-token
+**/.node-token
+
+# VM-related files
+*.log
+*.vdi
+*.box
