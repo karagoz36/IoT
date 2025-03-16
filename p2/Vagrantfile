@@ -1,0 +1,20 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"  # Ubuntu 22.04 LTS (Jammy Jellyfish)
+  config.vm.hostname = "tkaragozS"
+  config.vm.network "private_network", ip: "192.168.56.110"
+  
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "tkaragozS"
+    vb.memory = "1024"
+    vb.cpus = 1
+  end
+  
+  # Increase boot timeout to avoid SSH connection issues
+  config.vm.boot_timeout = 600
+  
+  # Install K3s first
+  config.vm.provision "shell", path: "scripts/install_k3s.sh"
+  
+  # Deploy applications
+  config.vm.provision "shell", path: "scripts/deploy_apps.sh"
+end

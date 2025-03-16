@@ -1,0 +1,195 @@
+.
+├── confs
+│   ├── app1.yaml
+│   ├── app2.yaml
+│   ├── app3.yaml
+│   └── ingress.yaml
+├── output.txt
+├── scripts
+│   ├── deploy_apps.sh
+│   └── install_k3s.sh
+└── Vagrantfile
+
+3 directories, 8 files
+====================
+=== ./scripts/install_k3s.sh ===
+#!/bin/bash
+set -e
+
+# Update system and install dependencies
+sudo apt-get update -y
+sudo apt-get install -y curl
+
+# Install K3s
+curl -sfL https://get.k3s.io | sh -
+
+# Enable and start K3s service
+sudo systemctl enable k3s
+sudo systemctl start k3s
+
+# Allow kubectl access
+mkdir -p $HOME/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Verify installation
+kubectl get nodes
+
+# /etc/hosts dosyasına giriş ekle
+echo "192.168.56.110  app1.com app2.com app3.com" | sudo tee -a /etc/hosts > /dev/null
+=== ./scripts/deploy_apps.sh ===
+#!/bin/bash
+set -e
+
+# Kubernetes YAML dosyalarını uygula
+kubectl apply -f /vagrant/confs/app1.yaml
+kubectl apply -f /vagrant/confs/app2.yaml
+kubectl apply -f /vagrant/confs/app3.yaml
+kubectl apply -f /vagrant/confs/ingress.yaml
+
+# /etc/hosts dosyasına giriş ekle
+if ! grep -q "192.168.56.110  app1.com app2.com app3.com" /etc/hosts; then
+    echo "192.168.56.110  app1.com app2.com app3.com" | sudo tee -a /etc/hosts > /dev/null
+fi
+=== ./confs/app3.yaml ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app3
+  template:
+    metadata:
+      labels:
+        app: app3
+    spec:
+      containers:
+      - name: app3
+        image: nginx
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app3
+spec:
+  selector:
+    app: app3
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+=== ./confs/app1.yaml ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app1
+  template:
+    metadata:
+      labels:
+        app: app1
+    spec:
+      containers:
+      - name: app1
+        image: nginx
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app1
+spec:
+  selector:
+    app: app1
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80=== ./confs/ingress.yaml ===
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+spec:
+  rules:
+  - host: app1.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app1
+            port:
+              number: 80
+  - host: app2.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app2
+            port:
+              number: 80
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app3
+            port:
+              number: 80
+
+=== ./confs/app2.yaml ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app2
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app2
+  template:
+    metadata:
+      labels:
+        app: app2
+    spec:
+      containers:
+      - name: app2
+        image: nginx
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app2
+spec:
+  selector:
+    app: app2
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80=== ./Vagrantfile ===
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/focal64"
+  config.vm.network "private_network", ip: "192.168.56.110"
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "1024"
+    vb.cpus = 1
+  end
+  config.vm.provision "shell", path: "scripts/install_k3s.sh"
+  config.vm.provision "shell", path: "scripts/deploy_apps.sh"
+end
