@@ -75,7 +75,7 @@ This part focuses on continuous integration using K3d and Argo CD.
 3. Configure a GitHub repository with application manifests
 4. Deploy the application and test version switching
 
-## Bonus: Gitlab Integration
+## Bonus: Gitlab Integration (In process)
 The bonus part extends Part 3 by integrating Gitlab.
 
 ### Requirements
